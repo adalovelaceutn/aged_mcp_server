@@ -2,7 +2,7 @@
 
 from mcp.server.fastmcp import FastMCP
 
-from curriculo_matematica.data.curriculo import curriculo_data
+from curriculo_matematica.models.curriculo import curriculo_data
 
 
 def register(mcp: FastMCP) -> None:

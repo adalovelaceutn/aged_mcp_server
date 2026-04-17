@@ -4,14 +4,17 @@ Expone herramientas para que un agente docente consulte el currículo.
 """
 
 from mcp.server.fastmcp import FastMCP
-from curriculo_data import curriculo_data
+from curriculo_matematica.models.curriculo import curriculo_data
 
 mcp = FastMCP(
     name="curriculo-matematica",
     instructions=(
         "Servidor de datos curriculares de matemática. "
         "Proporciona información sobre nodos temáticos, capacidades, saberes, "
-        "prerrequisitos, actividades y experiencias didácticas."
+        "prerrequisitos, actividades y experiencias didácticas. "
+        "Además, permite registrar, consultar y resumir bitácoras de sesión por alumno, "
+        "y obtener/actualizar el perfil de aprendizaje Kolb con evidencia pedagógica "
+        "para personalizar el acompañamiento."
     ),
 )
 

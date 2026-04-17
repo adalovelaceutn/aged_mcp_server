@@ -6,10 +6,18 @@ Servidor [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) que ex
 
 ```
 aged_mcp_server/
-├── server.py          # Servidor MCP principal
-├── curriculo_data.py  # Datos curriculares (14 nodos)
-├── mcp_config.json    # Configuración para cliente MCP
-└── pyproject.toml     # Metadatos del proyecto
+├── server.py                   # Servidor MCP principal (compatibilidad)
+├── src/curriculo_matematica/
+│   ├── app.py                  # Punto de entrada principal del paquete
+│   ├── models/
+│   │   └── curriculo.py        # Modelo de datos curriculares
+│   ├── schemas/
+│   │   ├── bitacora.py         # Esquemas para registros de sesion
+│   │   └── perfil_kolb.py      # Esquemas para perfil de aprendizaje
+│   ├── tools/                  # Herramientas MCP
+│   └── resources/              # Recursos MCP
+├── mcp_config.json             # Configuración para cliente MCP
+└── pyproject.toml              # Metadatos del proyecto
 ```
 
 ## Instalación
@@ -42,6 +50,67 @@ mcp dev server.py
 | `obtener_actividades` | Lista de actividades asociadas a un nodo |
 | `buscar_por_nivel` | Nodos que pertenecen a un nivel curricular |
 | `obtener_ruta_aprendizaje` | Cadena completa de prerrequisitos hacia un nodo |
+| `registrar_bitacora_sesion` | Registra un turno de sesion con contexto pedagogico |
+| `obtener_bitacora_sesion` | Consulta la bitacora de una sesion por alumno |
+| `resumir_bitacora_sesion` | Resume progreso, andamiaje y frustracion de la sesion |
+| `obtener_perfil_kolb` | Obtiene o inicializa el perfil Kolb de un alumno |
+| `actualizar_perfil_kolb` | Actualiza el perfil Kolb y agrega evidencia pedagogica |
+
+## Perfil Kolb del alumno
+
+El servidor guarda el perfil de cada alumno en `student_profiles/{alumno_id}.json`.
+
+Estructura base:
+
+```json
+{
+	"alumno_id": "luis_navarro_001",
+	"updated_at": "2026-04-17T18:10:00Z",
+	"kolb_profile": {
+		"activo": 0.35,
+		"reflexivo": 0.25,
+		"teorico": 0.20,
+		"pragmatico": 0.20
+	},
+	"preferencia_principal": "activo",
+	"evidencia": [
+		{
+			"timestamp": "2026-04-17T18:10:00Z",
+			"origen": "docente",
+			"texto": "Participa mejor con ejercicios de exploracion guiada"
+		}
+	]
+}
+```
+
+## Bitacora de sesion
+
+El servidor guarda registros en `session_logs/{alumno_id}/{sesion_id}.jsonl`, una linea JSON por turno.
+
+Estructura registrada:
+
+```json
+{
+	"alumno_id": "luis_navarro_001",
+	"sesion_id": "math_2026_04_17",
+	"data": {
+		"turn_index": 5,
+		"timestamp": "2026-04-17T17:34:00Z",
+		"actor": "Lovelace_Tutor",
+		"payload": {
+			"text": "Que pasaria si dividimos esa pizza en 8 partes...?",
+			"media_ref": "v123_video_particion.mp4"
+		},
+		"pedagogical_context": {
+			"target_concept": "fracciones_equivalentes",
+			"kolb_strategy": "activo_experimental",
+			"scaffolding_level": 2,
+			"detected_frustration": 0.1,
+			"active_misconception": "none"
+		}
+	}
+}
+```
 
 ## Recursos disponibles
 
