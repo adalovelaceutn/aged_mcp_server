@@ -58,7 +58,14 @@ mcp dev server.py
 
 ## Perfil Kolb del alumno
 
-El servidor guarda el perfil de cada alumno en `student_profiles/{alumno_id}.json`.
+El servidor guarda el perfil de cada alumno en la tabla PostgreSQL `student_profile` (Neon).
+
+Variables de entorno relevantes:
+
+- `KOLB_STORAGE_BACKEND`: `postgres` (default) o `json`
+- `NEON_DATABASE_URL`: cadena de conexión PostgreSQL para Neon
+
+Si `KOLB_STORAGE_BACKEND=json`, se usa almacenamiento local en `student_profiles/{alumno_id}.json`.
 
 Estructura base:
 

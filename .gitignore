@@ -13,3 +13,6 @@ build/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Variables de entorno (nunca subir al repo)
+.env

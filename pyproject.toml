@@ -5,6 +5,7 @@ description = "Servidor MCP con datos curriculares para un agente docente de mat
 requires-python = ">=3.11"
 dependencies = [
     "mcp[cli]>=1.6.0",
+    "psycopg[binary]>=3.2.0",
 ]
 
 [project.scripts]

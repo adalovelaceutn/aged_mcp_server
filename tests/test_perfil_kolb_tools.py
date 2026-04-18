@@ -9,6 +9,7 @@ def _register_perfil(fake_mcp):
 
 
 def test_obtener_perfil_kolb_inexistente_retorna_error(tmp_path, monkeypatch, fake_mcp):
+    monkeypatch.setenv("KOLB_STORAGE_BACKEND", "json")
     monkeypatch.setattr(perfil_kolb, "_PROFILE_BASE_DIR", tmp_path / "student_profiles")
     tools = _register_perfil(fake_mcp)
 
@@ -29,6 +30,7 @@ def test_obtener_perfil_kolb_id_invalido(fake_mcp):
 
 
 def test_actualizar_perfil_kolb_normaliza_y_agrega_evidencia(tmp_path, monkeypatch, fake_mcp):
+    monkeypatch.setenv("KOLB_STORAGE_BACKEND", "json")
     monkeypatch.setattr(perfil_kolb, "_PROFILE_BASE_DIR", tmp_path / "student_profiles")
     tools = _register_perfil(fake_mcp)
 
@@ -66,6 +68,7 @@ def test_actualizar_perfil_kolb_score_fuera_de_rango(fake_mcp):
 
 
 def test_actualizar_perfil_kolb_empate_preferencia(tmp_path, monkeypatch, fake_mcp):
+    monkeypatch.setenv("KOLB_STORAGE_BACKEND", "json")
     monkeypatch.setattr(perfil_kolb, "_PROFILE_BASE_DIR", tmp_path / "student_profiles")
     tools = _register_perfil(fake_mcp)
 

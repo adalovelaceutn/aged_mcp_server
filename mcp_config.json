@@ -4,7 +4,9 @@
       "command": "/workspaces/aged_mcp_server/.venv/bin/python",
       "args": ["/workspaces/aged_mcp_server/src/curriculo_matematica/app.py"],
       "env": {
-        "PYTHONPATH": "/workspaces/aged_mcp_server/src"
+        "PYTHONPATH": "/workspaces/aged_mcp_server/src",
+        "KOLB_STORAGE_BACKEND": "postgres",
+        "NEON_DATABASE_URL": "${NEON_DATABASE_URL}"
       }
     },
     "curriculo-matematica-sse": {
