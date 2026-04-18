@@ -6,6 +6,9 @@
       "env": {
         "PYTHONPATH": "/workspaces/aged_mcp_server/src"
       }
+    },
+    "curriculo-matematica-sse": {
+      "url": "http://127.0.0.1:8000/sse"
     }
   }
 }

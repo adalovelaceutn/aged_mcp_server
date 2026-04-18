@@ -78,11 +78,11 @@ def register(mcp: FastMCP) -> None:
 
         profile_file = _profile_file_path(alumno_id)
         if not profile_file.exists():
-            default_profile = _default_profile(alumno_id)
-            profile_file.parent.mkdir(parents=True, exist_ok=True)
-            with profile_file.open("w", encoding="utf-8") as handler:
-                json.dump(default_profile, handler, ensure_ascii=False, indent=2)
-            return default_profile
+            return {
+                "error": f"No existe perfil Kolb para el alumno '{alumno_id}'.",
+                "alumno_id": alumno_id,
+                "not_found": True,
+            }
 
         with profile_file.open("r", encoding="utf-8") as handler:
             return json.load(handler)

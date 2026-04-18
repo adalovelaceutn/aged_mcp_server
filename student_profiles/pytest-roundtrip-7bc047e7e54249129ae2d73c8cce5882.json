@@ -1,0 +1,18 @@
+{
+  "alumno_id": "pytest-roundtrip-7bc047e7e54249129ae2d73c8cce5882",
+  "updated_at": "2026-04-18T01:43:03.487994Z",
+  "kolb_profile": {
+    "activo": 0.4,
+    "reflexivo": 0.1,
+    "teorico": 0.3,
+    "pragmatico": 0.2
+  },
+  "preferencia_principal": "activo",
+  "evidencia": [
+    {
+      "timestamp": "2026-04-18T01:43:03.488001Z",
+      "origen": "entrevista_a2a",
+      "texto": "Integration test profiler_agent -> MCP roundtrip"
+    }
+  ]
+}

@@ -8,15 +8,16 @@ def _register_perfil(fake_mcp):
     return fake_mcp.tools
 
 
-def test_obtener_perfil_kolb_inicializa_default(tmp_path, monkeypatch, fake_mcp):
+def test_obtener_perfil_kolb_inexistente_retorna_error(tmp_path, monkeypatch, fake_mcp):
     monkeypatch.setattr(perfil_kolb, "_PROFILE_BASE_DIR", tmp_path / "student_profiles")
     tools = _register_perfil(fake_mcp)
 
-    profile = tools["obtener_perfil_kolb"]("luis_navarro_001")
+    result = tools["obtener_perfil_kolb"]("luis_navarro_001")
 
-    assert profile["alumno_id"] == "luis_navarro_001"
-    assert profile["preferencia_principal"] == "equilibrado"
-    assert sum(profile["kolb_profile"].values()) == 1.0
+    assert result["not_found"] is True
+    assert result["alumno_id"] == "luis_navarro_001"
+    assert "error" in result
+    assert not (tmp_path / "student_profiles" / "luis_navarro_001.json").exists()
 
 
 def test_obtener_perfil_kolb_id_invalido(fake_mcp):
