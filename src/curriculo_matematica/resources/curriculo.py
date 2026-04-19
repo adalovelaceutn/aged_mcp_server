@@ -2,7 +2,7 @@
 
 from mcp.server.fastmcp import FastMCP
 
-from curriculo_matematica.models.curriculo import curriculo_data
+from curriculo_matematica.dao.curriculo_gateway import get_curriculo_dao
 
 
 def register(mcp: FastMCP) -> None:
@@ -10,8 +10,17 @@ def register(mcp: FastMCP) -> None:
     @mcp.resource("curriculo://nodos")
     def recurso_todos_los_nodos() -> str:
         """Recurso que expone el currículo completo como texto estructurado."""
+        try:
+            dao = get_curriculo_dao()
+            summary = dao.list_nodes_summary()
+        except Exception as error:
+            return f"Error al consultar currículo en DB: {error}"
+
         lineas = ["# Currículo de Matemática\n"]
-        for nodo_id, datos in curriculo_data.items():
+        for nodo_id in sorted(summary.keys()):
+            datos = dao.get_node(nodo_id)
+            if datos is None:
+                continue
             lineas.append(f"## {nodo_id} — {datos['titulo']}")
             lineas.append(f"**Nivel:** {datos['nombre_nivel']}")
             lineas.append(f"**Capacidad:** {datos['capacidad']}")
@@ -24,10 +33,14 @@ def register(mcp: FastMCP) -> None:
     def recurso_nodo(nodo_id: str) -> str:
         """Recurso que expone un nodo curricular completo como texto."""
         nodo_id = nodo_id.strip().upper()
-        if nodo_id not in curriculo_data:
+        try:
+            datos = get_curriculo_dao().get_node(nodo_id)
+        except Exception as error:
+            return f"Error al consultar currículo en DB: {error}"
+
+        if datos is None:
             return f"Nodo '{nodo_id}' no encontrado."
 
-        datos = curriculo_data[nodo_id]
         ed = datos["experiencia_didactica"]
         saberes = "\n".join(f"  - {s}" for s in datos["saberes"])
         andamiaje = "\n".join(f"  {i+1}. {a}" for i, a in enumerate(ed["andamiaje"]))

@@ -1,5 +1,6 @@
-"""Compatibilidad retroactiva para importar datos curriculares desde data."""
+"""Módulo mantenido por compatibilidad.
 
-from curriculo_matematica.models.curriculo import curriculo_data
+El curriculo se obtiene desde DB externa via DAO (ver curriculo_gateway).
+"""
 
-__all__ = ["curriculo_data"]
+__all__: list[str] = []

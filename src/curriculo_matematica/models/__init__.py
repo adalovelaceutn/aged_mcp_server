@@ -1,3 +1,3 @@
-from curriculo_matematica.models.curriculo import curriculo_data
+"""Exports del paquete de modelos."""
 
-__all__ = ["curriculo_data"]
+__all__: list[str] = []

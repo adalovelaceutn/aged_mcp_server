@@ -2,7 +2,7 @@
 
 from mcp.server.fastmcp import FastMCP
 
-from curriculo_matematica.models.curriculo import curriculo_data
+from curriculo_matematica.dao.curriculo_gateway import get_curriculo_dao
 
 
 def register(mcp: FastMCP) -> None:
@@ -16,24 +16,34 @@ def register(mcp: FastMCP) -> None:
             nodo_id: Identificador del nodo (ej: 'NODO_03').
         """
         nodo_id = nodo_id.strip().upper()
-        if nodo_id not in curriculo_data:
+        dao = get_curriculo_dao()
+        try:
+            nodo = dao.get_node(nodo_id)
+        except Exception as error:
+            return {"error": f"No se pudo consultar el currículo en DB: {error}"}
+
+        if nodo is None:
             return {"error": f"Nodo '{nodo_id}' no encontrado."}
 
-        prereqs = curriculo_data[nodo_id]["prerrequisitos"]
+        prereqs = nodo["prerrequisitos"]
         if not prereqs:
             return {"nodo_id": nodo_id, "prerrequisitos": [], "mensaje": "Este nodo no tiene prerrequisitos."}
 
+        prereqs_data: list[dict] = []
+        for pid in prereqs:
+            pnode = dao.get_node(pid)
+            if pnode is not None:
+                prereqs_data.append(
+                    {
+                        "id": pid,
+                        "titulo": pnode["titulo"],
+                        "nombre_nivel": pnode["nombre_nivel"],
+                    }
+                )
+
         return {
             "nodo_id": nodo_id,
-            "prerrequisitos": [
-                {
-                    "id": pid,
-                    "titulo": curriculo_data[pid]["titulo"],
-                    "nombre_nivel": curriculo_data[pid]["nombre_nivel"],
-                }
-                for pid in prereqs
-                if pid in curriculo_data
-            ],
+            "prerrequisitos": prereqs_data,
         }
 
     @mcp.tool()
@@ -45,10 +55,13 @@ def register(mcp: FastMCP) -> None:
             nodo_id: Identificador del nodo (ej: 'NODO_09').
         """
         nodo_id = nodo_id.strip().upper()
-        if nodo_id not in curriculo_data:
-            return {"error": f"Nodo '{nodo_id}' no encontrado."}
+        try:
+            nodo = get_curriculo_dao().get_node(nodo_id)
+        except Exception as error:
+            return {"error": f"No se pudo consultar el currículo en DB: {error}"}
 
-        nodo = curriculo_data[nodo_id]
+        if nodo is None:
+            return {"error": f"Nodo '{nodo_id}' no encontrado."}
         return {
             "nodo_id": nodo_id,
             "titulo": nodo["titulo"],
@@ -65,7 +78,13 @@ def register(mcp: FastMCP) -> None:
             nodo_id: Identificador del nodo destino (ej: 'NODO_13').
         """
         nodo_id = nodo_id.strip().upper()
-        if nodo_id not in curriculo_data:
+        dao = get_curriculo_dao()
+        try:
+            root = dao.get_node(nodo_id)
+        except Exception as error:
+            return {"error": f"No se pudo consultar el currículo en DB: {error}"}
+
+        if root is None:
             return {"error": f"Nodo '{nodo_id}' no encontrado."}
 
         visitados: list[str] = []
@@ -73,21 +92,27 @@ def register(mcp: FastMCP) -> None:
         def _resolver(nid: str) -> None:
             if nid in visitados:
                 return
-            for prereq in curriculo_data.get(nid, {}).get("prerrequisitos", []):
+            node = dao.get_node(nid)
+            if node is None:
+                return
+            for prereq in node.get("prerrequisitos", []):
                 _resolver(prereq)
             if nid not in visitados:
                 visitados.append(nid)
 
         _resolver(nodo_id)
 
+        nodos_cache = {nid: dao.get_node(nid) for nid in visitados}
+
         return {
             "nodo_destino": nodo_id,
             "ruta_ordenada": [
                 {
                     "id": nid,
-                    "titulo": curriculo_data[nid]["titulo"],
-                    "nombre_nivel": curriculo_data[nid]["nombre_nivel"],
+                    "titulo": nodos_cache[nid]["titulo"],
+                    "nombre_nivel": nodos_cache[nid]["nombre_nivel"],
                 }
                 for nid in visitados
+                if nodos_cache[nid] is not None
             ],
         }

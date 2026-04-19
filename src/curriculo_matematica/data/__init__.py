@@ -1,3 +1,6 @@
-from curriculo_matematica.models.curriculo import curriculo_data
+"""Paquete de datos curriculares.
 
-__all__ = ["curriculo_data"]
+Los datos del curriculo se consultan desde la DB externa mediante DAO.
+"""
+
+__all__: list[str] = []

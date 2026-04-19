@@ -2,7 +2,7 @@
 
 from mcp.server.fastmcp import FastMCP
 
-from curriculo_matematica.models.curriculo import curriculo_data
+from curriculo_matematica.dao.curriculo_gateway import get_curriculo_dao
 
 
 def register(mcp: FastMCP) -> None:
@@ -17,10 +17,13 @@ def register(mcp: FastMCP) -> None:
             nodo_id: Identificador del nodo (ej: 'NODO_05').
         """
         nodo_id = nodo_id.strip().upper()
-        if nodo_id not in curriculo_data:
-            return {"error": f"Nodo '{nodo_id}' no encontrado."}
+        try:
+            nodo = get_curriculo_dao().get_node(nodo_id)
+        except Exception as error:
+            return {"error": f"No se pudo consultar el currículo en DB: {error}"}
 
-        nodo = curriculo_data[nodo_id]
+        if nodo is None:
+            return {"error": f"Nodo '{nodo_id}' no encontrado."}
         return {
             "nodo_id": nodo_id,
             "titulo": nodo["titulo"],
@@ -36,10 +39,13 @@ def register(mcp: FastMCP) -> None:
             nodo_id: Identificador del nodo (ej: 'NODO_08').
         """
         nodo_id = nodo_id.strip().upper()
-        if nodo_id not in curriculo_data:
-            return {"error": f"Nodo '{nodo_id}' no encontrado."}
+        try:
+            nodo = get_curriculo_dao().get_node(nodo_id)
+        except Exception as error:
+            return {"error": f"No se pudo consultar el currículo en DB: {error}"}
 
-        nodo = curriculo_data[nodo_id]
+        if nodo is None:
+            return {"error": f"Nodo '{nodo_id}' no encontrado."}
         return {
             "nodo_id": nodo_id,
             "titulo": nodo["titulo"],
