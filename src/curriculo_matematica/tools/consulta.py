@@ -5,6 +5,20 @@ from mcp.server.fastmcp import FastMCP
 from curriculo_matematica.dao.curriculo_gateway import get_curriculo_dao
 
 
+def _normalizar_nodo_curriculo(nodo: dict) -> dict:
+    """Garantiza claves esperadas por clientes sin romper compatibilidad."""
+    normalizado = dict(nodo)
+    normalizado.setdefault("saberes", [])
+
+    nodos_requeridos = normalizado.get("nodos_requeridos")
+    if nodos_requeridos is None:
+        nodos_requeridos = normalizado.get("prerrequisitos", [])
+
+    normalizado["nodos_requeridos"] = list(nodos_requeridos)
+    normalizado["prerrequisitos"] = list(normalizado.get("prerrequisitos", nodos_requeridos))
+    return normalizado
+
+
 def register(mcp: FastMCP) -> None:
 
     @mcp.tool()
@@ -14,6 +28,11 @@ def register(mcp: FastMCP) -> None:
             curriculo_data = get_curriculo_dao().export_as_dict()
         except Exception as error:
             return {"error": f"No se pudo exportar el currículo desde DB: {error}"}
+
+        curriculo_data = {
+            nodo_id: _normalizar_nodo_curriculo(datos)
+            for nodo_id, datos in curriculo_data.items()
+        }
 
         return {
             "ok": True,
@@ -32,8 +51,13 @@ def register(mcp: FastMCP) -> None:
         if not isinstance(curriculo_data, dict) or not curriculo_data:
             return {"error": "'curriculo_data' debe ser un diccionario no vacío de nodos."}
 
+        curriculo_data_normalizado = {
+            nodo_id: _normalizar_nodo_curriculo(datos)
+            for nodo_id, datos in curriculo_data.items()
+        }
+
         try:
-            resultado = get_curriculo_dao().upsert_from_dict(curriculo_data)
+            resultado = get_curriculo_dao().upsert_from_dict(curriculo_data_normalizado)
             total = get_curriculo_dao().count_nodes()
         except Exception as error:
             return {"error": f"No se pudo resincronizar el currículo en DB: {error}"}
@@ -69,7 +93,7 @@ def register(mcp: FastMCP) -> None:
 
         if nodo is None:
             return {"error": f"Nodo '{nodo_id}' no encontrado. Use listar_nodos() para ver los disponibles."}
-        return nodo
+        return _normalizar_nodo_curriculo(nodo)
 
     @mcp.tool()
     def buscar_por_nivel(nombre_nivel: str) -> dict:

@@ -208,6 +208,8 @@ def test_obtener_nodo_valido_normaliza_id(fake_mcp):
 
     assert result["titulo"] == CURRICULO_FAKE["NODO_03"]["titulo"]
     assert "saberes" in result
+    assert "nodos_requeridos" in result
+    assert result["nodos_requeridos"] == CURRICULO_FAKE["NODO_03"]["prerrequisitos"]
 
 
 def test_resincronizar_curriculo_db_ok(fake_mcp):
@@ -247,6 +249,8 @@ def test_exportar_curriculo_db_ok(fake_mcp):
     assert result["ok"] is True
     assert result["total_nodes"] == len(CURRICULO_FAKE)
     assert "NODO_01" in result["curriculo_data"]
+    assert "saberes" in result["curriculo_data"]["NODO_01"]
+    assert "nodos_requeridos" in result["curriculo_data"]["NODO_01"]
 
 
 def test_obtener_nodo_invalido(fake_mcp):

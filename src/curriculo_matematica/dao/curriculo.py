@@ -243,7 +243,8 @@ class CurriculoDAO:
                 CurriculoNodoActividad(nodo_id=nodo_id, actividad_id=actividad_id, orden=idx)
             )
 
-        for prereq_id in datos.get("prerrequisitos", []):
+        prerequisitos = datos.get("nodos_requeridos", datos.get("prerrequisitos", []))
+        for prereq_id in prerequisitos:
             # Si el prerequisito no existe, se ignora para evitar romper sincronizacion.
             if session.get(CurriculoNodo, prereq_id) is not None:
                 session.add(
