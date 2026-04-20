@@ -248,9 +248,10 @@ def test_exportar_curriculo_db_ok(fake_mcp):
 
     assert result["ok"] is True
     assert result["total_nodes"] == len(CURRICULO_FAKE)
-    assert "NODO_01" in result["curriculo_data"]
-    assert "saberes" in result["curriculo_data"]["NODO_01"]
-    assert "nodos_requeridos" in result["curriculo_data"]["NODO_01"]
+    assert isinstance(result["nodos"], list)
+    assert len(result["nodos"]) == len(CURRICULO_FAKE)
+    assert "saberes" in result["nodos"][0]
+    assert "prerrequisitos" in result["nodos"][0]
 
 
 def test_obtener_nodo_invalido(fake_mcp):

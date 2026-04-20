@@ -23,22 +23,19 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.tool()
     def exportar_curriculo_db() -> dict:
-        """Exporta el curriculo completo desde DB en formato compatible con resincronizar_curriculo_db."""
+        """Exporta el curriculo completo desde DB como lista de nodos."""
         try:
             curriculo_data = get_curriculo_dao().export_as_dict()
         except Exception as error:
             return {"error": f"No se pudo exportar el currículo desde DB: {error}"}
 
-        curriculo_data = {
-            nodo_id: _normalizar_nodo_curriculo(datos)
-            for nodo_id, datos in curriculo_data.items()
-        }
+        nodos = [_normalizar_nodo_curriculo(datos) for _, datos in sorted(curriculo_data.items())]
 
         return {
             "ok": True,
             "message": "Currículo exportado desde DB externa.",
-            "total_nodes": len(curriculo_data),
-            "curriculo_data": curriculo_data,
+            "total_nodes": len(nodos),
+            "nodos": nodos,
         }
 
     @mcp.tool()
