@@ -98,6 +98,30 @@ def test_actualizar_perfil_kolb_normaliza_y_agrega_evidencia(monkeypatch, fake_m
     assert profile["evidencia"][0]["origen"] == "tutor_ai"
 
 
+def test_insertar_perfil_kolb_mock_db_student_id_35(monkeypatch, fake_mcp):
+    fake_dao = _FakeStudentProfileDAO()
+    monkeypatch.setattr(perfil_kolb, "_dao", lambda: fake_dao)
+    tools = _register_perfil(fake_mcp)
+
+    guardar = tools["actualizar_perfil_kolb"](
+        alumno_id="35",
+        activo=0.2,
+        reflexivo=0.4,
+        teorico=0.3,
+        pragmatico=0.1,
+        evidencia_texto="Perfil inicial mock para alumno 35",
+        origen="test_suite",
+    )
+    consultar = tools["obtener_perfil_kolb"]("35")
+
+    assert guardar["ok"] is True
+    assert "35" in fake_dao._rows
+    assert consultar["alumno_id"] == "35"
+    assert consultar["preferencia_principal"] == "reflexivo"
+    assert len(consultar["evidencia"]) == 1
+    assert consultar["evidencia"][0]["origen"] == "test_suite"
+
+
 def test_actualizar_perfil_kolb_score_fuera_de_rango(monkeypatch, fake_mcp):
     monkeypatch.setattr(perfil_kolb, "_dao", lambda: _FakeStudentProfileDAO())
     tools = _register_perfil(fake_mcp)

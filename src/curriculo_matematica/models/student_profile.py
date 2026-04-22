@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Numeric, String, Text
+from sqlalchemy import DateTime, Integer, Numeric, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -16,8 +16,8 @@ class StudentProfile(Base):
 
     __tablename__ = "student_profile"
 
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    alumno_id: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    alumno_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     kolb_activo: Mapped[float] = mapped_column(Numeric(5, 4), nullable=False)
     kolb_reflexivo: Mapped[float] = mapped_column(Numeric(5, 4), nullable=False)
@@ -35,7 +35,7 @@ class StudentProfile(Base):
         updated_at = self.updated_at.isoformat().replace("+00:00", "Z")
         evidencia = self.evidencia if isinstance(self.evidencia, list) else []
         return {
-            "alumno_id": self.alumno_id,
+            "alumno_id": str(self.alumno_id),
             "updated_at": updated_at,
             "kolb_profile": {
                 "activo": float(self.kolb_activo),

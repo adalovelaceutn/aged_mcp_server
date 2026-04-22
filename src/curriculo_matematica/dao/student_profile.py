@@ -37,8 +37,17 @@ class StudentProfileDAO:
         finally:
             session.close()
 
-    def get_by_alumno_id(self, alumno_id: str) -> StudentProfile | None:
-        stmt = select(StudentProfile).where(StudentProfile.alumno_id == alumno_id)
+    def _parse_alumno_id(self, alumno_id: str | int) -> int:
+        if isinstance(alumno_id, int):
+            return alumno_id
+        value = str(alumno_id).strip()
+        if not value.isdigit():
+            raise ValueError("alumno_id debe ser numerico para el esquema Neon actual.")
+        return int(value)
+
+    def get_by_alumno_id(self, alumno_id: str | int) -> StudentProfile | None:
+        alumno_id_int = self._parse_alumno_id(alumno_id)
+        stmt = select(StudentProfile).where(StudentProfile.id == alumno_id_int)
         with self._session() as session:
             row = session.scalar(stmt)
             if row is not None:
@@ -47,18 +56,20 @@ class StudentProfileDAO:
 
     def upsert_profile(
         self,
-        alumno_id: str,
+        alumno_id: str | int,
         updated_at: datetime,
         kolb_profile: dict[str, float],
         preferencia_principal: str,
         evidencia: list[dict],
     ) -> StudentProfile:
-        stmt = select(StudentProfile).where(StudentProfile.alumno_id == alumno_id)
+        alumno_id_int = self._parse_alumno_id(alumno_id)
+        stmt = select(StudentProfile).where(StudentProfile.id == alumno_id_int)
         with self._session() as session:
             row = session.scalar(stmt)
             if row is None:
                 row = StudentProfile(
-                    alumno_id=alumno_id,
+                    id=alumno_id_int,
+                    alumno_id=alumno_id_int,
                     updated_at=updated_at,
                     kolb_activo=Decimal(str(kolb_profile["activo"])),
                     kolb_reflexivo=Decimal(str(kolb_profile["reflexivo"])),
@@ -69,6 +80,7 @@ class StudentProfileDAO:
                 )
                 session.add(row)
             else:
+                row.alumno_id = alumno_id_int
                 row.updated_at = updated_at
                 row.kolb_activo = Decimal(str(kolb_profile["activo"]))
                 row.kolb_reflexivo = Decimal(str(kolb_profile["reflexivo"]))
