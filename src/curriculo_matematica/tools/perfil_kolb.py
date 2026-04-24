@@ -102,19 +102,46 @@ def _extract_scenarios_completed(assessment_answers: list[dict]) -> list[int]:
     return sorted({int(item["scenario_id"]) for item in assessment_answers})
 
 
-def _normalize_payload_answers(answers: list[dict] | None) -> list[dict]:
+def _as_dict(value: object) -> dict:
+    if isinstance(value, dict):
+        return value
+    model_dump = getattr(value, "model_dump", None)
+    if callable(model_dump):
+        dumped = model_dump()
+        if isinstance(dumped, dict):
+            return dumped
+    legacy_dict = getattr(value, "dict", None)
+    if callable(legacy_dict):
+        dumped = legacy_dict()
+        if isinstance(dumped, dict):
+            return dumped
+    raw = getattr(value, "__dict__", None)
+    if isinstance(raw, dict):
+        return dict(raw)
+    return {}
+
+
+def _get_value(item: object, key: str, default: object = None) -> object:
+    if isinstance(item, dict):
+        return item.get(key, default)
+    return getattr(item, key, default)
+
+
+def _normalize_payload_answers(answers: list[object] | None) -> list[dict]:
     normalized: list[dict] = []
     for item in answers or []:
         try:
-            scenario_id = int(item["scenario_id"])
+            scenario_id = int(_get_value(item, "scenario_id"))
         except Exception as error:
             raise ValueError("Cada answer debe incluir 'scenario_id' numerico.") from error
 
-        dimension = str(item.get("dimension") or "").strip().upper()
+        dimension = str(_get_value(item, "dimension") or "").strip().upper()
         if dimension not in {"AE", "RO", "AC", "CE"}:
             raise ValueError("Cada answer debe incluir 'dimension' en {AE, RO, AC, CE}.")
 
-        answer_text = str(item.get("answer") or "").strip()
+        answer_text = str(
+            _get_value(item, "answer") or _get_value(item, "answer_text") or ""
+        ).strip()
         normalized.append(
             build_assessment_answer(
                 scenario_id=scenario_id,
@@ -136,14 +163,19 @@ def _normalize_payload_scenarios(raw_value: object) -> list[int]:
 
 
 def _build_profile_from_agent_payload(payload: dict) -> dict:
-    student_id = _validar_student_id(str(payload.get("student_id", "")))
-    nested = payload.get("kolb_profile")
-    if not isinstance(nested, dict):
-        raise ValueError("El payload debe incluir objeto 'kolb_profile'.")
+    payload_dict = _as_dict(payload)
+    nested_raw = payload_dict.get("kolb_profile")
+    nested = _as_dict(nested_raw) if nested_raw is not None else payload_dict
+    if not nested:
+        raise ValueError("El payload debe incluir datos de perfil Kolb.")
 
-    vector = nested.get("current_vector")
-    if not isinstance(vector, dict):
-        raise ValueError("'kolb_profile.current_vector' es obligatorio.")
+    student_id_raw = nested.get("student_id", payload_dict.get("student_id", ""))
+    student_id = _validar_student_id(str(student_id_raw))
+
+    vector_raw = nested.get("current_vector")
+    vector = _as_dict(vector_raw)
+    if not vector:
+        raise ValueError("'current_vector' es obligatorio en el perfil Kolb.")
 
     kolb_vector = {
         "ae_score": _validar_score(float(vector.get("AE", 0.0)), "AE"),
@@ -155,24 +187,25 @@ def _build_profile_from_agent_payload(payload: dict) -> dict:
 
     style = (
         str(nested.get("style") or "").strip()
-        or str(payload.get("kolb_style") or "").strip()
+        or str(payload_dict.get("kolb_style") or "").strip()
         or _infer_style(kolb_vector)
     )
 
-    confidence_raw = nested.get("confidence", payload.get("confidence"))
+    confidence_raw = nested.get("confidence", payload_dict.get("confidence"))
     confidence = float(confidence_raw) if confidence_raw is not None else _confidence(kolb_vector)
     confidence = round(max(0.0, min(1.0, confidence)), 4)
 
     assessment_answers = _normalize_payload_answers(nested.get("answers"))
     scenarios_completed = _normalize_payload_scenarios(nested.get("answered_scenarios"))
     if not scenarios_completed:
-        scenarios_completed = _normalize_payload_scenarios(payload.get("answered_scenarios"))
+        scenarios_completed = _normalize_payload_scenarios(payload_dict.get("answered_scenarios"))
     if not scenarios_completed:
         scenarios_completed = _extract_scenarios_completed(assessment_answers)
 
+
     return {
         "student_id": student_id,
-        "status": str(payload.get("status") or "completed").strip() or "completed",
+        "status": str(payload_dict.get("status") or "completed").strip() or "completed",
         "style": style,
         "confidence": confidence,
         "kolb_vector": kolb_vector,

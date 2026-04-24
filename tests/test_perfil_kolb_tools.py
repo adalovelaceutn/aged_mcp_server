@@ -238,3 +238,96 @@ def test_persistir_perfil_kolb_payload_invalido(monkeypatch, fake_mcp):
     result = tools["persistir_perfil_kolb"]({"student_id": 1})
 
     assert "error" in result
+
+
+def test_persistir_perfil_kolb_payload_plano_tipo_kolbprofile(monkeypatch, fake_mcp):
+    fake_dao = _FakeStudentProfileDAO()
+    monkeypatch.setattr(perfil_kolb, "_dao", lambda: fake_dao)
+    tools = _register_perfil(fake_mcp)
+
+    payload = {
+        "status": "completed",
+        "student_id": 123,
+        "current_vector": {"AE": 0.42, "RO": 0.31, "AC": 0.72, "CE": 0.55},
+        "style": "Converging",
+        "confidence": 0.89,
+        "answered_scenarios": [1, 2, 3, 4, 5, 6, 7, 8, 9],
+        "answers": [
+            {
+                "scenario_id": 1,
+                "dimension": "AC",
+                "answer": "Mock answer para validacion en Neon",
+            }
+        ],
+        "source": "integration_test_mock",
+        "summary": "Resumen mock",
+    }
+
+    result = tools["persistir_perfil_kolb"](payload)
+
+    assert result["ok"] is True
+    assert result["profile"]["student_id"] == "123"
+    assert result["profile"]["source"] == "integration_test_mock"
+    assert result["profile"]["scenarios_completed"] == [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    assert len(result["profile"]["assessment_answers"]) == 1
+    assert result["profile"]["assessment_answers"][0]["answer_text"].startswith("Mock answer")
+
+
+def test_persistir_perfil_kolb_admite_answer_text(monkeypatch, fake_mcp):
+    fake_dao = _FakeStudentProfileDAO()
+    monkeypatch.setattr(perfil_kolb, "_dao", lambda: fake_dao)
+    tools = _register_perfil(fake_mcp)
+
+    payload = {
+        "status": "completed",
+        "student_id": 456,
+        "current_vector": {"AE": 0.4, "RO": 0.2, "AC": 0.3, "CE": 0.1},
+        "answers": [
+            {
+                "scenario_id": 7,
+                "dimension": "RO",
+                "answer_text": "Respuesta en campo answer_text",
+            }
+        ],
+    }
+
+    result = tools["persistir_perfil_kolb"](payload)
+
+    assert result["ok"] is True
+    assert result["profile"]["assessment_answers"][0]["answer_text"] == "Respuesta en campo answer_text"
+    assert result["profile"]["scenarios_completed"] == [7]
+
+
+def test_persistir_perfil_kolb_mock_alumno_35(monkeypatch, fake_mcp):
+    fake_dao = _FakeStudentProfileDAO()
+    monkeypatch.setattr(perfil_kolb, "_dao", lambda: fake_dao)
+    tools = _register_perfil(fake_mcp)
+
+    payload = {
+        "status": "completed",
+        "student_id": 35,
+        "current_vector": {"AE": 0.42, "RO": 0.31, "AC": 0.72, "CE": 0.55},
+        "style": "Converging",
+        "confidence": 0.89,
+        "answered_scenarios": [1, 2, 3, 4, 5, 6, 7, 8, 9],
+        "answers": [
+            {
+                "scenario_id": 1,
+                "dimension": "AC",
+                "answer": "Mock answer para alumno 35",
+            }
+        ],
+        "source": "integration_test_mock",
+        "summary": "Perfil mock persistido para alumno 35",
+    }
+
+    guardar = tools["persistir_perfil_kolb"](payload)
+    consultar = tools["obtener_perfil_kolb"]("35")
+
+    assert guardar["ok"] is True
+    assert "35" in fake_dao._rows
+    assert consultar["student_id"] == "35"
+    assert consultar["style"] == "Converging"
+    assert consultar["source"] == "integration_test_mock"
+    assert consultar["scenarios_completed"] == [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    assert consultar["assessment_answers"][0]["answer_text"] == "Mock answer para alumno 35"

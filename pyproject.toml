@@ -21,3 +21,6 @@ packages = ["src/curriculo_matematica"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "integration: tests de integracion contra servicios externos como Neon DB",
+]
