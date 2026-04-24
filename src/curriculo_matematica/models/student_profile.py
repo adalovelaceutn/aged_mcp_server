@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, Numeric, String
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from curriculo_matematica.db.engine import Base
@@ -16,33 +15,102 @@ class StudentProfile(Base):
 
     __tablename__ = "student_profile"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
-    alumno_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    kolb_activo: Mapped[float] = mapped_column(Numeric(5, 4), nullable=False)
-    kolb_reflexivo: Mapped[float] = mapped_column(Numeric(5, 4), nullable=False)
-    kolb_teorico: Mapped[float] = mapped_column(Numeric(5, 4), nullable=False)
-    kolb_pragmatico: Mapped[float] = mapped_column(Numeric(5, 4), nullable=False)
-    preferencia_principal: Mapped[str] = mapped_column(String(32), nullable=False)
-    evidencia: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    student_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    assessment_name: Mapped[str] = mapped_column(
+        String(255),
         nullable=False,
-        default=lambda: datetime.now(timezone.utc),
+        default="Lovelace Everyday Life Profiling",
+    )
+    model_name: Mapped[str] = mapped_column(String(100), nullable=False, default="Kolb Cycle")
+    status: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    style: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    confidence: Mapped[float | None] = mapped_column(Numeric(5, 4), nullable=True)
+    ae_score: Mapped[float | None] = mapped_column(Numeric(5, 4), nullable=True)
+    ro_score: Mapped[float | None] = mapped_column(Numeric(5, 4), nullable=True)
+    ac_score: Mapped[float | None] = mapped_column(Numeric(5, 4), nullable=True)
+    ce_score: Mapped[float | None] = mapped_column(Numeric(5, 4), nullable=True)
+    source: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=False),
+        nullable=False,
+        server_default=func.now(),
     )
 
-    def to_profile_dict(self) -> dict:
-        updated_at = self.updated_at.isoformat().replace("+00:00", "Z")
-        evidencia = self.evidencia if isinstance(self.evidencia, list) else []
+    def to_profile_dict(
+        self,
+        assessment_answers: list[dict] | None = None,
+        scenarios_completed: list[int] | None = None,
+    ) -> dict:
+        confidence = float(self.confidence) if self.confidence is not None else None
+        ae_score = float(self.ae_score) if self.ae_score is not None else None
+        ro_score = float(self.ro_score) if self.ro_score is not None else None
+        ac_score = float(self.ac_score) if self.ac_score is not None else None
+        ce_score = float(self.ce_score) if self.ce_score is not None else None
+
         return {
-            "alumno_id": str(self.alumno_id),
-            "updated_at": updated_at,
-            "kolb_profile": {
-                "activo": float(self.kolb_activo),
-                "reflexivo": float(self.kolb_reflexivo),
-                "teorico": float(self.kolb_teorico),
-                "pragmatico": float(self.kolb_pragmatico),
+            "id": self.id,
+            "student_id": str(self.student_id),
+            "assessment_name": self.assessment_name,
+            "model_name": self.model_name,
+            "status": self.status,
+            "style": self.style,
+            "confidence": confidence,
+            "kolb_vector": {
+                "ae_score": ae_score,
+                "ro_score": ro_score,
+                "ac_score": ac_score,
+                "ce_score": ce_score,
             },
-            "preferencia_principal": self.preferencia_principal,
-            "evidencia": evidencia,
+            "source": self.source,
+            "summary": self.summary,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "assessment_answers": assessment_answers or [],
+            "scenarios_completed": scenarios_completed or [],
+        }
+
+
+class AssessmentAnswer(Base):
+    """Respuestas detalladas de una evaluación Kolb."""
+
+    __tablename__ = "assessment_answers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    profile_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("student_profile.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    scenario_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    dimension: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    answer_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "profile_id": self.profile_id,
+            "scenario_id": self.scenario_id,
+            "dimension": self.dimension,
+            "answer_text": self.answer_text,
+        }
+
+
+class ProfileScenarioCompleted(Base):
+    """Escenarios completados para analitica rapida."""
+
+    __tablename__ = "profile_scenarios_completed"
+
+    profile_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("student_profile.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    scenario_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+
+    def to_dict(self) -> dict:
+        return {
+            "profile_id": self.profile_id,
+            "scenario_id": self.scenario_id,
         }

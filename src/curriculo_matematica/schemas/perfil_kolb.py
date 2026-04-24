@@ -2,25 +2,44 @@
 
 from __future__ import annotations
 
-KOLB_DIMENSIONS = ("activo", "reflexivo", "teorico", "pragmatico")
+KOLB_DIMENSIONS = ("ae_score", "ro_score", "ac_score", "ce_score")
+
+DEFAULT_ASSESSMENT_NAME = "Lovelace Everyday Life Profiling"
+DEFAULT_MODEL_NAME = "Kolb Cycle"
 
 
-def build_default_profile(alumno_id: str, updated_at: str) -> dict:
+def build_default_profile(student_id: str, updated_at: str) -> dict:
     return {
-        "alumno_id": alumno_id,
+        "student_id": student_id,
+        "assessment_name": DEFAULT_ASSESSMENT_NAME,
+        "model_name": DEFAULT_MODEL_NAME,
+        "status": "pending",
+        "style": "Balanced",
+        "confidence": 0.0,
         "updated_at": updated_at,
-        "kolb_profile": {
-            "activo": 0.25,
-            "reflexivo": 0.25,
-            "teorico": 0.25,
-            "pragmatico": 0.25,
+        "kolb_vector": {
+            "ae_score": 0.25,
+            "ro_score": 0.25,
+            "ac_score": 0.25,
+            "ce_score": 0.25,
         },
-        "preferencia_principal": "equilibrado",
-        "evidencia": [],
+        "source": "system",
+        "summary": "",
+        "assessment_answers": [],
+        "scenarios_completed": [],
+    }
+
+
+def build_assessment_answer(scenario_id: int, dimension: str, answer_text: str) -> dict:
+    return {
+        "scenario_id": scenario_id,
+        "dimension": dimension,
+        "answer_text": answer_text,
     }
 
 
 def build_evidencia(timestamp: str, origen: str, texto: str) -> dict:
+    """Alias legacy para mantener compatibilidad de imports antiguos."""
     return {
         "timestamp": timestamp,
         "origen": origen,
