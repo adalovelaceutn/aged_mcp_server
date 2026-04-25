@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from decimal import Decimal
+import json
+import logging
 from typing import Iterator
 
 from sqlalchemy import delete, select
@@ -15,6 +17,9 @@ from curriculo_matematica.models.student_profile import (
     ProfileScenarioCompleted,
     StudentProfile,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 class StudentProfileDAO:
@@ -55,6 +60,13 @@ class StudentProfileDAO:
         if not value.isdigit():
             raise ValueError("student_id debe ser numerico para el esquema Neon actual.")
         return int(value)
+
+    def _log_insert(self, table_name: str, data: dict) -> None:
+        logger.info(
+            "[perfil_persistencia] INSERT %s data=%s",
+            table_name,
+            json.dumps(data, ensure_ascii=True, default=str),
+        )
 
     def _get_answers(self, session: Session, profile_id: int) -> list[dict]:
         stmt = (
@@ -129,6 +141,23 @@ class StudentProfileDAO:
                     summary=summary,
                 )
                 session.add(row)
+                self._log_insert(
+                    "student_profile",
+                    {
+                        "student_id": student_id_int,
+                        "assessment_name": assessment_name,
+                        "model_name": model_name,
+                        "status": status,
+                        "style": style,
+                        "confidence": confidence,
+                        "ae_score": kolb_vector["ae_score"],
+                        "ro_score": kolb_vector["ro_score"],
+                        "ac_score": kolb_vector["ac_score"],
+                        "ce_score": kolb_vector["ce_score"],
+                        "source": source,
+                        "summary": summary,
+                    },
+                )
             else:
                 row.student_id = student_id_int
                 row.assessment_name = assessment_name
@@ -149,13 +178,25 @@ class StudentProfileDAO:
                 delete(AssessmentAnswer).where(AssessmentAnswer.profile_id == row.id)
             )
             for answer in assessment_answers or []:
+                scenario_id = int(answer["scenario_id"])
+                dimension = str(answer.get("dimension") or "")
+                answer_text = str(answer.get("answer_text") or "")
                 session.add(
                     AssessmentAnswer(
                         profile_id=row.id,
-                        scenario_id=int(answer["scenario_id"]),
-                        dimension=str(answer.get("dimension") or ""),
-                        answer_text=str(answer.get("answer_text") or ""),
+                        scenario_id=scenario_id,
+                        dimension=dimension,
+                        answer_text=answer_text,
                     )
+                )
+                self._log_insert(
+                    "assessment_answers",
+                    {
+                        "profile_id": row.id,
+                        "scenario_id": scenario_id,
+                        "dimension": dimension,
+                        "answer_text": answer_text,
+                    },
                 )
 
             session.execute(
@@ -166,6 +207,13 @@ class StudentProfileDAO:
             for scenario_id in sorted({int(value) for value in (scenarios_completed or [])}):
                 session.add(
                     ProfileScenarioCompleted(profile_id=row.id, scenario_id=scenario_id)
+                )
+                self._log_insert(
+                    "profile_scenarios_completed",
+                    {
+                        "profile_id": row.id,
+                        "scenario_id": scenario_id,
+                    },
                 )
 
             session.flush()
