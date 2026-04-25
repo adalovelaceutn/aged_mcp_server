@@ -9,12 +9,90 @@ from __future__ import annotations
 import re
 from datetime import datetime, timezone
 from functools import lru_cache
+from typing import Any
 
 from mcp.server.fastmcp import FastMCP
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from curriculo_matematica.dao.bitacora import BitacoraDAO, BitacoraEntryDTO
 
 _SAFE_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
+
+
+class ErrorResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    error: str
+
+
+class RegistrarBitacoraInput(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    alumno_id: str = Field(min_length=1)
+    sesion_id: str = Field(min_length=1, pattern=r"^[a-zA-Z0-9_-]+$")
+    turn_index: int = Field(ge=0)
+    timestamp: str = Field(min_length=1)
+    actor: str = Field(min_length=1)
+    text: str = Field(min_length=1)
+    target_concept: str = Field(min_length=1)
+    kolb_strategy: str = Field(min_length=1)
+    scaffolding_level: int = Field(ge=0)
+    detected_frustration: float = Field(ge=0.0, le=1.0)
+    active_misconception: str = "none"
+    media_ref: str | None = None
+
+
+class ObtenerBitacoraInput(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    alumno_id: str = Field(min_length=1)
+    sesion_id: str = Field(min_length=1, pattern=r"^[a-zA-Z0-9_-]+$")
+    limit: int = Field(gt=0)
+
+
+class PedagogicalContextOutput(BaseModel):
+    target_concept: str
+    kolb_strategy: str
+    scaffolding_level: int | None = None
+    detected_frustration: float
+    active_misconception: str
+
+
+class BitacoraDataOutput(BaseModel):
+    turn_index: int
+    timestamp: str
+    actor: str
+    payload: dict[str, Any]
+    pedagogical_context: PedagogicalContextOutput
+
+
+class BitacoraRecordOutput(BaseModel):
+    alumno_id: str
+    sesion_id: str
+    data: BitacoraDataOutput
+
+
+class RegistrarBitacoraOutput(BaseModel):
+    ok: bool
+    message: str
+    id: int
+    record: BitacoraRecordOutput
+
+
+class ObtenerBitacoraOutput(BaseModel):
+    alumno_id: str
+    sesion_id: str
+    total_entries: int
+    returned_entries: int
+    entries: list[BitacoraRecordOutput]
+
+
+class ResumenBitacoraOutput(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    alumno_id: str
+    sesion_id: str
+    summary: dict[str, Any]
 
 
 # ---------------------------------------------------------------------------
@@ -24,6 +102,10 @@ _SAFE_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
 @lru_cache(maxsize=1)
 def _dao() -> BitacoraDAO:
     return BitacoraDAO()
+
+
+def _error_response(message: str, **kwargs: Any) -> dict:
+    return ErrorResponse.model_validate({"error": message, **kwargs}).model_dump()
 
 
 # ---------------------------------------------------------------------------
@@ -128,6 +210,35 @@ def register(mcp: FastMCP) -> None:
         alumno_id debe ser el entero correspondiente a alumnos.id en la base de datos.
         """
         try:
+            payload = RegistrarBitacoraInput.model_validate(
+                {
+                    "alumno_id": alumno_id,
+                    "sesion_id": sesion_id,
+                    "turn_index": turn_index,
+                    "timestamp": timestamp,
+                    "actor": actor,
+                    "text": text,
+                    "target_concept": target_concept,
+                    "kolb_strategy": kolb_strategy,
+                    "scaffolding_level": scaffolding_level,
+                    "detected_frustration": detected_frustration,
+                    "active_misconception": active_misconception,
+                    "media_ref": media_ref,
+                }
+            )
+            alumno_id = payload.alumno_id
+            sesion_id = payload.sesion_id
+            turn_index = payload.turn_index
+            timestamp = payload.timestamp
+            actor = payload.actor
+            text = payload.text
+            target_concept = payload.target_concept
+            kolb_strategy = payload.kolb_strategy
+            scaffolding_level = payload.scaffolding_level
+            detected_frustration = payload.detected_frustration
+            active_misconception = payload.active_misconception
+            media_ref = payload.media_ref
+
             alumno_int = _validar_alumno_id(alumno_id)
             sesion_id = _validar_id(sesion_id, "sesion_id")
             ts = _validar_timestamp(timestamp)
@@ -135,8 +246,8 @@ def register(mcp: FastMCP) -> None:
             actor, text, target_concept, kolb_strategy = _validar_textos(
                 actor, text, target_concept, kolb_strategy
             )
-        except ValueError as error:
-            return {"error": str(error)}
+        except (ValidationError, ValueError) as error:
+            return _error_response(str(error))
 
         active_misconception = active_misconception.strip() or "none"
         payload: dict = {"text": text}
@@ -160,61 +271,88 @@ def register(mcp: FastMCP) -> None:
         try:
             row = _dao().create(entry)
         except Exception as error:
-            return {"error": f"Error al guardar en PostgreSQL: {error}"}
+            return _error_response(f"Error al guardar en PostgreSQL: {error}")
 
-        return {
-            "ok": True,
-            "message": "Registro de bitacora guardado.",
-            "id": row.id,
-            "record": row.to_dict(),
-        }
+        return RegistrarBitacoraOutput.model_validate(
+            {
+                "ok": True,
+                "message": "Registro de bitacora guardado.",
+                "id": row.id,
+                "record": row.to_dict(),
+            }
+        ).model_dump()
 
     @mcp.tool()
     def obtener_bitacora_sesion(alumno_id: str, sesion_id: str, limit: int = 100) -> dict:
         """Devuelve los ultimos registros de una bitacora de sesion por alumno y sesion."""
         try:
+            payload = ObtenerBitacoraInput.model_validate(
+                {
+                    "alumno_id": alumno_id,
+                    "sesion_id": sesion_id,
+                    "limit": limit,
+                }
+            )
+            alumno_id = payload.alumno_id
+            sesion_id = payload.sesion_id
+            limit = payload.limit
+
             alumno_int = _validar_alumno_id(alumno_id)
             sesion_id = _validar_id(sesion_id, "sesion_id")
-        except ValueError as error:
-            return {"error": str(error)}
-
-        if limit <= 0:
-            return {"error": "'limit' debe ser mayor a 0."}
+        except (ValidationError, ValueError) as error:
+            return _error_response(str(error))
 
         try:
             total = _dao().count_by_session(alumno_int, sesion_id)
             rows = _dao().find_by_session(alumno_int, sesion_id, limit)
         except Exception as error:
-            return {"error": f"Error al consultar PostgreSQL: {error}"}
+            return _error_response(f"Error al consultar PostgreSQL: {error}")
 
-        return {
-            "alumno_id": alumno_id,
-            "sesion_id": sesion_id,
-            "total_entries": total,
-            "returned_entries": len(rows),
-            "entries": [r.to_dict() for r in rows],
-        }
+        return ObtenerBitacoraOutput.model_validate(
+            {
+                "alumno_id": alumno_id,
+                "sesion_id": sesion_id,
+                "total_entries": total,
+                "returned_entries": len(rows),
+                "entries": [r.to_dict() for r in rows],
+            }
+        ).model_dump()
 
     @mcp.tool()
     def resumir_bitacora_sesion(alumno_id: str, sesion_id: str) -> dict:
         """Devuelve un resumen pedagogico de la sesion para seguimiento del aprendizaje."""
         try:
+            payload = ObtenerBitacoraInput.model_validate(
+                {
+                    "alumno_id": alumno_id,
+                    "sesion_id": sesion_id,
+                    "limit": 1,
+                }
+            )
+            alumno_id = payload.alumno_id
+            sesion_id = payload.sesion_id
+
             alumno_int = _validar_alumno_id(alumno_id)
             sesion_id = _validar_id(sesion_id, "sesion_id")
-        except ValueError as error:
-            return {"error": str(error)}
+        except (ValidationError, ValueError) as error:
+            return _error_response(str(error))
 
         try:
             rows = _dao().find_by_session(alumno_int, sesion_id, limit=10_000)
         except Exception as error:
-            return {"error": f"Error al consultar PostgreSQL: {error}"}
+            return _error_response(f"Error al consultar PostgreSQL: {error}")
 
         if not rows:
-            return {
-                "alumno_id": alumno_id,
-                "sesion_id": sesion_id,
-                "summary": {"total_turns": 0, "message": "No hay registros para esta sesion."},
-            }
+            return ResumenBitacoraOutput.model_validate(
+                {
+                    "alumno_id": alumno_id,
+                    "sesion_id": sesion_id,
+                    "summary": {
+                        "total_turns": 0,
+                        "message": "No hay registros para esta sesion.",
+                    },
+                }
+            ).model_dump()
 
         concept_counts: dict[str, int] = {}
         misconception_counts: dict[str, int] = {}
@@ -266,17 +404,19 @@ def register(mcp: FastMCP) -> None:
         )
         main_concept = max(concept_counts, key=concept_counts.get) if concept_counts else None
 
-        return {
-            "alumno_id": alumno_id,
-            "sesion_id": sesion_id,
-            "summary": {
-                "total_turns": len(rows),
-                "actors": actor_counts,
-                "concept_coverage": concept_counts,
-                "main_concept": main_concept,
-                "average_scaffolding_level": avg_scaffolding,
-                "average_detected_frustration": avg_frustration,
-                "active_misconceptions": misconception_counts,
-                "timeline": timeline,
-            },
-        }
+        return ResumenBitacoraOutput.model_validate(
+            {
+                "alumno_id": alumno_id,
+                "sesion_id": sesion_id,
+                "summary": {
+                    "total_turns": len(rows),
+                    "actors": actor_counts,
+                    "concept_coverage": concept_counts,
+                    "main_concept": main_concept,
+                    "average_scaffolding_level": avg_scaffolding,
+                    "average_detected_frustration": avg_frustration,
+                    "active_misconceptions": misconception_counts,
+                    "timeline": timeline,
+                },
+            }
+        ).model_dump()

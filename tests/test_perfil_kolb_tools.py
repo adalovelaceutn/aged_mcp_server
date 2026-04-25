@@ -370,3 +370,41 @@ def test_persistir_perfil_kolb_payload_agente_con_aliases_de_salida(monkeypatch,
     assert result["profile"]["source"] == "integration_agent"
     assert result["profile"]["scenarios_completed"] == [2, 4, 6]
     assert result["profile"]["assessment_answers"][0]["answer_text"] == "Respuesta desde alias assessment_answers"
+
+
+def test_persistir_perfil_kolb_payload_agente_con_typos_y_camelcase(monkeypatch, fake_mcp):
+    fake_dao = _FakeStudentProfileDAO()
+    monkeypatch.setattr(perfil_kolb, "_dao", lambda: fake_dao)
+    tools = _register_perfil(fake_mcp)
+
+    payload = {
+        "status": "completed",
+        "student_id": 790,
+        "source": "integration_agent",
+        "kolb_profile": {
+            "student_id": 790,
+            "current_vector": {
+                "AE": 0.42,
+                "RO": 0.31,
+                "AC": 0.72,
+                "CE": 0.55,
+            },
+            "assesment_answers": [
+                {
+                    "scenarioId": 3,
+                    "dimension": "CE",
+                    "answerText": "Respuesta con typo en la clave principal",
+                }
+            ],
+            "scenariosCompleted": "3,5,7",
+        },
+    }
+
+    result = tools["persistir_perfil_kolb"](payload)
+
+    assert result["ok"] is True
+    assert result["profile"]["student_id"] == "790"
+    assert result["profile"]["scenarios_completed"] == [3, 5, 7]
+    assert len(result["profile"]["assessment_answers"]) == 1
+    assert result["profile"]["assessment_answers"][0]["scenario_id"] == 3
+    assert result["profile"]["assessment_answers"][0]["answer_text"] == "Respuesta con typo en la clave principal"

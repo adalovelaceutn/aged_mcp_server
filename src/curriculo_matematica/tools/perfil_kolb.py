@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from functools import lru_cache
+from typing import Any
 
 from mcp.server.fastmcp import FastMCP
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from curriculo_matematica.dao.student_profile import StudentProfileDAO
 from curriculo_matematica.schemas.perfil_kolb import (
@@ -16,9 +18,85 @@ from curriculo_matematica.schemas.perfil_kolb import (
     build_default_profile,
 )
 
+
+class ErrorResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    error: str
+
+
+class ObtenerPerfilKolbInput(BaseModel):
+    alumno_id: str = Field(min_length=1)
+
+
+class ActualizarPerfilKolbInput(BaseModel):
+    alumno_id: str = Field(min_length=1)
+    ae_score: float = Field(ge=0.0, le=1.0)
+    ro_score: float = Field(ge=0.0, le=1.0)
+    ac_score: float = Field(ge=0.0, le=1.0)
+    ce_score: float = Field(ge=0.0, le=1.0)
+    evidencia_texto: str | None = None
+    origen: str = "docente"
+    status: str = "completed"
+    summary: str | None = None
+    assessment_name: str = DEFAULT_ASSESSMENT_NAME
+    model_name: str = DEFAULT_MODEL_NAME
+
+
+class PersistirPerfilKolbInput(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    student_id: int | str | None = None
+    kolb_profile: dict[str, Any] | None = None
+    current_vector: dict[str, Any] | None = None
+
+
+class KolbVectorOutput(BaseModel):
+    ae_score: float | None = None
+    ro_score: float | None = None
+    ac_score: float | None = None
+    ce_score: float | None = None
+
+
+class AssessmentAnswerOutput(BaseModel):
+    id: int | None = None
+    profile_id: int | None = None
+    scenario_id: int
+    dimension: str | None = None
+    answer_text: str | None = None
+
+
+class PerfilKolbOutput(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    id: int | None = None
+    student_id: str
+    assessment_name: str
+    model_name: str
+    status: str | None = None
+    style: str | None = None
+    confidence: float | None = None
+    kolb_vector: KolbVectorOutput
+    source: str | None = None
+    summary: str | None = None
+    created_at: str | None = None
+    assessment_answers: list[AssessmentAnswerOutput] = []
+    scenarios_completed: list[int] = []
+
+
+class PerfilKolbUpsertResponse(BaseModel):
+    ok: bool
+    message: str
+    storage: str
+    profile: PerfilKolbOutput
+
 @lru_cache(maxsize=1)
 def _dao() -> StudentProfileDAO:
     return StudentProfileDAO()
+
+
+def _error_response(message: str, **kwargs: Any) -> dict:
+    return ErrorResponse.model_validate({"error": message, **kwargs}).model_dump()
 
 
 def _utc_now_dt() -> datetime:
@@ -131,7 +209,11 @@ def _normalize_payload_answers(answers: list[object] | None) -> list[dict]:
     normalized: list[dict] = []
     for item in answers or []:
         try:
-            scenario_id = int(_get_value(item, "scenario_id"))
+            scenario_id_raw = _coalesce(
+                _get_value(item, "scenario_id"),
+                _get_value(item, "scenarioId"),
+            )
+            scenario_id = int(scenario_id_raw)
         except Exception as error:
             raise ValueError("Cada answer debe incluir 'scenario_id' numerico.") from error
 
@@ -140,7 +222,14 @@ def _normalize_payload_answers(answers: list[object] | None) -> list[dict]:
             raise ValueError("Cada answer debe incluir 'dimension' en {AE, RO, AC, CE}.")
 
         answer_text = str(
-            _get_value(item, "answer") or _get_value(item, "answer_text") or ""
+            _coalesce(
+                _get_value(item, "answer"),
+                _get_value(item, "answer_text"),
+                _get_value(item, "answerText"),
+                _get_value(item, "response"),
+                _get_value(item, "texto"),
+                "",
+            )
         ).strip()
         normalized.append(
             build_assessment_answer(
@@ -155,10 +244,19 @@ def _normalize_payload_answers(answers: list[object] | None) -> list[dict]:
 def _normalize_payload_scenarios(raw_value: object) -> list[int]:
     if isinstance(raw_value, list):
         return sorted({int(value) for value in raw_value})
+    if isinstance(raw_value, tuple | set):
+        return sorted({int(value) for value in raw_value})
     if isinstance(raw_value, int):
         if raw_value <= 0:
             return []
         return list(range(1, raw_value + 1))
+    if isinstance(raw_value, str):
+        value = raw_value.strip()
+        if not value:
+            return []
+        if "," in value:
+            return sorted({int(part.strip()) for part in value.split(",") if part.strip()})
+        return [int(value)]
     return []
 
 
@@ -225,16 +323,26 @@ def _build_profile_from_agent_payload(payload: dict) -> dict:
     answers_raw = _coalesce(
         nested.get("answers"),
         nested.get("assessment_answers"),
+        nested.get("assesment_answers"),
+        nested.get("assessmentAnswers"),
         payload_dict.get("answers"),
         payload_dict.get("assessment_answers"),
+        payload_dict.get("assesment_answers"),
+        payload_dict.get("assessmentAnswers"),
     )
     assessment_answers = _normalize_payload_answers(answers_raw)
 
     scenarios_raw = _coalesce(
         nested.get("answered_scenarios"),
         nested.get("scenarios_completed"),
+        nested.get("answeredScenarios"),
+        nested.get("scenariosCompleted"),
+        nested.get("scenario_completed"),
         payload_dict.get("answered_scenarios"),
         payload_dict.get("scenarios_completed"),
+        payload_dict.get("answeredScenarios"),
+        payload_dict.get("scenariosCompleted"),
+        payload_dict.get("scenario_completed"),
     )
     scenarios_completed = _normalize_payload_scenarios(scenarios_raw)
     if not scenarios_completed:
@@ -269,26 +377,28 @@ def register(mcp: FastMCP) -> None:
     def obtener_perfil_kolb(alumno_id: str) -> dict:
         """Obtiene el perfil Kolb actual de un alumno."""
         try:
+            payload = ObtenerPerfilKolbInput.model_validate({"alumno_id": alumno_id})
+            alumno_id = payload.alumno_id
             student_id = _validar_student_id(alumno_id)
-        except ValueError as error:
-            return {"error": str(error)}
+        except (ValidationError, ValueError) as error:
+            return _error_response(str(error))
 
         try:
             profile = _dao().get_by_student_id(student_id)
         except Exception as error:
-            return {
-                "error": "No se pudo consultar PostgreSQL via DAO.",
-                "detail": str(error),
-                "student_id": str(student_id),
-            }
+            return _error_response(
+                "No se pudo consultar PostgreSQL via DAO.",
+                detail=str(error),
+                student_id=str(student_id),
+            )
 
         if profile is None:
-            return {
-                "error": f"No existe perfil Kolb para el alumno '{student_id}'.",
-                "student_id": str(student_id),
-                "not_found": True,
-            }
-        return profile
+            return _error_response(
+                f"No existe perfil Kolb para el alumno '{student_id}'.",
+                student_id=str(student_id),
+                not_found=True,
+            )
+        return PerfilKolbOutput.model_validate(profile).model_dump()
 
     @mcp.tool()
     def actualizar_perfil_kolb(
@@ -310,6 +420,32 @@ def register(mcp: FastMCP) -> None:
         Los valores deben estar en [0.0, 1.0] y luego se normalizan para que sumen 1.0.
         """
         try:
+            payload = ActualizarPerfilKolbInput.model_validate(
+                {
+                    "alumno_id": alumno_id,
+                    "ae_score": ae_score,
+                    "ro_score": ro_score,
+                    "ac_score": ac_score,
+                    "ce_score": ce_score,
+                    "evidencia_texto": evidencia_texto,
+                    "origen": origen,
+                    "status": status,
+                    "summary": summary,
+                    "assessment_name": assessment_name,
+                    "model_name": model_name,
+                }
+            )
+            alumno_id = payload.alumno_id
+            ae_score = payload.ae_score
+            ro_score = payload.ro_score
+            ac_score = payload.ac_score
+            ce_score = payload.ce_score
+            evidencia_texto = payload.evidencia_texto
+            origen = payload.origen
+            status = payload.status
+            summary = payload.summary
+            assessment_name = payload.assessment_name
+            model_name = payload.model_name
             student_id = _validar_student_id(alumno_id)
             kolb_vector = {
                 "ae_score": _validar_score(ae_score, "ae_score"),
@@ -317,8 +453,8 @@ def register(mcp: FastMCP) -> None:
                 "ac_score": _validar_score(ac_score, "ac_score"),
                 "ce_score": _validar_score(ce_score, "ce_score"),
             }
-        except ValueError as error:
-            return {"error": str(error)}
+        except (ValidationError, ValueError) as error:
+            return _error_response(str(error))
 
         kolb_vector = _normalize_profile(kolb_vector)
         style = _infer_style(kolb_vector)
@@ -329,11 +465,11 @@ def register(mcp: FastMCP) -> None:
         try:
             existing = _dao().get_by_student_id(student_id)
         except Exception as error:
-            return {
-                "error": "No se pudo consultar PostgreSQL via DAO.",
-                "detail": str(error),
-                "student_id": str(student_id),
-            }
+            return _error_response(
+                "No se pudo consultar PostgreSQL via DAO.",
+                detail=str(error),
+                student_id=str(student_id),
+            )
 
         if existing is None:
             profile = _default_profile(student_id)
@@ -367,26 +503,29 @@ def register(mcp: FastMCP) -> None:
                 model_name=profile["model_name"],
             )
         except Exception as error:
-            return {
-                "error": "No se pudo guardar en PostgreSQL via DAO.",
-                "detail": str(error),
-                "student_id": str(student_id),
-            }
+            return _error_response(
+                "No se pudo guardar en PostgreSQL via DAO.",
+                detail=str(error),
+                student_id=str(student_id),
+            )
 
-        return {
-            "ok": True,
-            "message": "Perfil Kolb actualizado.",
-            "storage": "postgresql-sqlalchemy-dao",
-            "profile": persisted,
-        }
+        return PerfilKolbUpsertResponse.model_validate(
+            {
+                "ok": True,
+                "message": "Perfil Kolb actualizado.",
+                "storage": "postgresql-sqlalchemy-dao",
+                "profile": persisted,
+            }
+        ).model_dump()
 
     @mcp.tool()
     def persistir_perfil_kolb(payload: dict) -> dict:
         """Persiste un perfil Kolb recibido como objeto JSON anidado desde un agente."""
         try:
-            mapped = _build_profile_from_agent_payload(payload)
-        except ValueError as error:
-            return {"error": str(error)}
+            payload_model = PersistirPerfilKolbInput.model_validate(payload)
+            mapped = _build_profile_from_agent_payload(payload_model.model_dump())
+        except (ValidationError, ValueError) as error:
+            return _error_response(str(error))
 
         try:
             persisted = _dao().upsert_profile(
@@ -403,15 +542,17 @@ def register(mcp: FastMCP) -> None:
                 model_name=mapped["model_name"],
             )
         except Exception as error:
-            return {
-                "error": "No se pudo guardar en PostgreSQL via DAO.",
-                "detail": str(error),
-                "student_id": str(mapped["student_id"]),
-            }
+            return _error_response(
+                "No se pudo guardar en PostgreSQL via DAO.",
+                detail=str(error),
+                student_id=str(mapped["student_id"]),
+            )
 
-        return {
-            "ok": True,
-            "message": "Perfil Kolb persistido desde payload de agente.",
-            "storage": "postgresql-sqlalchemy-dao",
-            "profile": persisted,
-        }
+        return PerfilKolbUpsertResponse.model_validate(
+            {
+                "ok": True,
+                "message": "Perfil Kolb persistido desde payload de agente.",
+                "storage": "postgresql-sqlalchemy-dao",
+                "profile": persisted,
+            }
+        ).model_dump()
