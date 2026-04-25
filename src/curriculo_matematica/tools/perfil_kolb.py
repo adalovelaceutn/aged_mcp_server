@@ -162,6 +162,28 @@ def _normalize_payload_scenarios(raw_value: object) -> list[int]:
     return []
 
 
+def _coalesce(*values: object) -> object:
+    for value in values:
+        if value is not None:
+            return value
+    return None
+
+
+def _vector_component(vector: dict, key_short: str, key_long: str) -> float:
+    candidates = [
+        vector.get(key_short),
+        vector.get(key_short.upper()),
+        vector.get(key_short.lower()),
+        vector.get(key_long),
+        vector.get(key_long.upper()),
+        vector.get(key_long.lower()),
+    ]
+    value = _coalesce(*candidates)
+    if value is None:
+        return 0.0
+    return float(value)
+
+
 def _build_profile_from_agent_payload(payload: dict) -> dict:
     payload_dict = _as_dict(payload)
     nested_raw = payload_dict.get("kolb_profile")
@@ -172,16 +194,21 @@ def _build_profile_from_agent_payload(payload: dict) -> dict:
     student_id_raw = nested.get("student_id", payload_dict.get("student_id", ""))
     student_id = _validar_student_id(str(student_id_raw))
 
-    vector_raw = nested.get("current_vector")
+    vector_raw = _coalesce(
+        nested.get("current_vector"),
+        payload_dict.get("current_vector"),
+        nested.get("kolb_vector"),
+        payload_dict.get("kolb_vector"),
+    )
     vector = _as_dict(vector_raw)
     if not vector:
-        raise ValueError("'current_vector' es obligatorio en el perfil Kolb.")
+        raise ValueError("'current_vector' o 'kolb_vector' es obligatorio en el perfil Kolb.")
 
     kolb_vector = {
-        "ae_score": _validar_score(float(vector.get("AE", 0.0)), "AE"),
-        "ro_score": _validar_score(float(vector.get("RO", 0.0)), "RO"),
-        "ac_score": _validar_score(float(vector.get("AC", 0.0)), "AC"),
-        "ce_score": _validar_score(float(vector.get("CE", 0.0)), "CE"),
+        "ae_score": _validar_score(_vector_component(vector, "ae", "ae_score"), "AE"),
+        "ro_score": _validar_score(_vector_component(vector, "ro", "ro_score"), "RO"),
+        "ac_score": _validar_score(_vector_component(vector, "ac", "ac_score"), "AC"),
+        "ce_score": _validar_score(_vector_component(vector, "ce", "ce_score"), "CE"),
     }
     kolb_vector = _normalize_profile(kolb_vector)
 
@@ -195,10 +222,21 @@ def _build_profile_from_agent_payload(payload: dict) -> dict:
     confidence = float(confidence_raw) if confidence_raw is not None else _confidence(kolb_vector)
     confidence = round(max(0.0, min(1.0, confidence)), 4)
 
-    assessment_answers = _normalize_payload_answers(nested.get("answers"))
-    scenarios_completed = _normalize_payload_scenarios(nested.get("answered_scenarios"))
-    if not scenarios_completed:
-        scenarios_completed = _normalize_payload_scenarios(payload_dict.get("answered_scenarios"))
+    answers_raw = _coalesce(
+        nested.get("answers"),
+        nested.get("assessment_answers"),
+        payload_dict.get("answers"),
+        payload_dict.get("assessment_answers"),
+    )
+    assessment_answers = _normalize_payload_answers(answers_raw)
+
+    scenarios_raw = _coalesce(
+        nested.get("answered_scenarios"),
+        nested.get("scenarios_completed"),
+        payload_dict.get("answered_scenarios"),
+        payload_dict.get("scenarios_completed"),
+    )
+    scenarios_completed = _normalize_payload_scenarios(scenarios_raw)
     if not scenarios_completed:
         scenarios_completed = _extract_scenarios_completed(assessment_answers)
 
@@ -209,13 +247,18 @@ def _build_profile_from_agent_payload(payload: dict) -> dict:
         "style": style,
         "confidence": confidence,
         "kolb_vector": kolb_vector,
-        "source": str(nested.get("source") or "agente").strip() or "agente",
-        "summary": str(nested.get("summary") or "").strip(),
+        "source": str(_coalesce(nested.get("source"), payload_dict.get("source"), "agente")).strip()
+        or "agente",
+        "summary": str(_coalesce(nested.get("summary"), payload_dict.get("summary"), "")).strip(),
         "assessment_answers": assessment_answers,
         "scenarios_completed": scenarios_completed,
-        "assessment_name": str(nested.get("assessment_name") or DEFAULT_ASSESSMENT_NAME).strip()
+        "assessment_name": str(
+            _coalesce(nested.get("assessment_name"), payload_dict.get("assessment_name"), DEFAULT_ASSESSMENT_NAME)
+        ).strip()
         or DEFAULT_ASSESSMENT_NAME,
-        "model_name": str(nested.get("model_name") or DEFAULT_MODEL_NAME).strip()
+        "model_name": str(
+            _coalesce(nested.get("model_name"), payload_dict.get("model_name"), DEFAULT_MODEL_NAME)
+        ).strip()
         or DEFAULT_MODEL_NAME,
     }
 

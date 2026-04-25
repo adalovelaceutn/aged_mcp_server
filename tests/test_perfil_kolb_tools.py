@@ -331,3 +331,42 @@ def test_persistir_perfil_kolb_mock_alumno_35(monkeypatch, fake_mcp):
     assert consultar["source"] == "integration_test_mock"
     assert consultar["scenarios_completed"] == [1, 2, 3, 4, 5, 6, 7, 8, 9]
     assert consultar["assessment_answers"][0]["answer_text"] == "Mock answer para alumno 35"
+
+
+def test_persistir_perfil_kolb_payload_agente_con_aliases_de_salida(monkeypatch, fake_mcp):
+    fake_dao = _FakeStudentProfileDAO()
+    monkeypatch.setattr(perfil_kolb, "_dao", lambda: fake_dao)
+    tools = _register_perfil(fake_mcp)
+
+    payload = {
+        "status": "completed",
+        "student_id": 789,
+        "source": "integration_agent",
+        "kolb_profile": {
+            "student_id": 789,
+            "assessment_name": "Lovelace Everyday Life Profiling",
+            "model_name": "Kolb Cycle",
+            "kolb_vector": {
+                "ae_score": 0.42,
+                "ro_score": 0.31,
+                "ac_score": 0.72,
+                "ce_score": 0.55,
+            },
+            "assessment_answers": [
+                {
+                    "scenario_id": 2,
+                    "dimension": "RO",
+                    "answer_text": "Respuesta desde alias assessment_answers",
+                }
+            ],
+            "scenarios_completed": [2, 4, 6],
+        },
+    }
+
+    result = tools["persistir_perfil_kolb"](payload)
+
+    assert result["ok"] is True
+    assert result["profile"]["student_id"] == "789"
+    assert result["profile"]["source"] == "integration_agent"
+    assert result["profile"]["scenarios_completed"] == [2, 4, 6]
+    assert result["profile"]["assessment_answers"][0]["answer_text"] == "Respuesta desde alias assessment_answers"
