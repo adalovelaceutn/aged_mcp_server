@@ -7,7 +7,7 @@ Servidor [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) que ex
 ```
 aged_mcp_server/
 ├── server.py                   # Servidor MCP principal (compatibilidad)
-├── src/curriculo_matematica/
+├── src/server_mcp/
 │   ├── app.py                  # Punto de entrada principal del paquete
 │   ├── models/
 │   │   └── curriculo.py        # Modelo de datos curriculares
